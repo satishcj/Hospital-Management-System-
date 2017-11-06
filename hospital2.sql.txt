@@ -1,0 +1,289 @@
+CREATE TABLE patient(
+    pid int,
+    fname varchar(20) not null,
+    lname varchar(20),
+    gender varchar(6) not null,
+    dob date not null,
+    blood_group varchar(3),
+    doc_id int,
+    HNo varchar(10),
+    street varchar(20),
+    city varchar(16),
+    state varchar(20),
+    email varchar(30),
+    Primary Key(pid));
+
+
+CREATE TABLE Employee(
+    empid int,
+    fname varchar(20) not null,
+    mname varchar(20),
+    lname varchar(20),
+    gender varchar(6) not null,
+    emptype varchar(20) not null,
+    Hno varchar(10),
+    street varchar(20),
+    city varchar(20),
+    state varchar(20),
+    date_of_joining date,
+    email varchar(30),
+    deptid int,
+    since date,
+date_of_birth date,
+    PRIMARY key(empid));
+
+CREATE TABLE department(
+    deptid int,
+    dname varchar(20) not null,
+    dept_headid int(10),
+    PRIMARY key(deptid));
+
+
+CREATE table salary(
+    etype varchar(20),
+    salary float(20,2),
+    PRIMARY key(etype));
+
+CREATE TABLE nurse_assigned(
+    nid int,
+    countpatient int,
+    PRIMARY KEY(nid),
+     FOREIGN KEY(nid) REFERENCES employee(empid));
+
+CREATE TABLE out_patient(
+    pid  int,
+    arrival_date date,
+    disease varchar(40),
+    PRIMARY key(pid,arrival_date),
+    FOREIGN KEY(pid) REFERENCES patient(pid));
+
+CREATE TABLE room(
+    rid int,
+    roomtype varchar(20),
+    PRIMARY key(rid));
+
+
+    CREATE TABLE in_patient(
+    pid int,
+    nid int,
+    rid int,
+    arrival_date date,
+        discharge_date date,
+        disease varchar(40),
+        primary key(pid,arrival_date),
+        FOREIGN key(pid) REFERENCES patient(pid),
+        FOREIGN KEY(nid) REFERENCES employee(empid),
+        FOREIGN key(rid) REFERENCES room(rid));
+
+
+CREATE TABLE room_cost(
+    roomtype varchar(20),
+    rcost  int,
+    PRIMARY KEY(rtype));
+
+CREATE TABLE relative(
+    pid int,
+    rname varchar(30),
+    rtype varchar(30),
+    pno varchar(11),
+    PRIMARY key(pid));
+
+
+CREATE TABLE test(
+    tid int,
+    tname varchar(20),
+    tcost float(10,2),
+    primary KEY(tid));
+
+CREATE TABLE hadtest(
+    pid int,
+    tid int,
+    testdate date,
+    PRIMARY KEY(pid,tid,testdate),
+    FOREIGN KEY(pid) REFERENCES patient(pid),
+    FOREIGN key(tid) REFERENCES test(tid));
+
+CREATE TABLE medicine(
+    mid int,
+    mname varchar(40) not null,
+    mcost float(20,2),
+    PRIMARY key(mid));
+
+CREATE TABLE had_medicine(
+    pid int,
+    mid int,
+    med_date date,
+    qty int,
+    PRIMARY KEY(pid,mid,med_date),
+    FOREIGN KEY(pid) REFERENCES patient(pid),
+    FOREIGN KEY(mid) REFERENCES medicine(mid));
+
+
+CREATE TABLE pt_phone(
+    pid int,
+    phoneno varchar(10),
+    PRIMARY KEY(pid,phoneno),
+    FOREIGN KEY(pid) REFERENCES patient(pid));
+
+
+CREATE TABLE emp_phone(
+    empid int,
+    phoneno varchar(10),
+    PRIMARY KEY(empid,phoneno));
+
+
+CREATE TABLE bill(
+    pid int,
+    mcost float(20,2),
+    tcost float(20,2),
+    roomcharges float(20,2),
+    othercharges float(20,2),
+    billdate date,
+    PRIMARY KEY(pid,billdate));
+    
+    
+    CREATE TABLE employee_inactive(
+    empid int,
+    fname varchar(20) not null,
+    mname varchar(20),
+    lname varchar(20),
+    gender varchar(6) not null,
+    emptype varchar(20) not null,
+    Hno varchar(10),
+    street varchar(20),
+    city varchar(20),
+    state varchar(20),
+    date_of_joining date,
+    date_of_leaving date,
+    email varchar(30),
+    PRIMARY key(empid));
+
+DELIMITER //
+CREATE TRIGGER transfer_to_passive BEFORE DELETE ON employee 
+FOR EACH ROW 
+BEGIN 
+      INSERT into employee_inactive
+       SELECT empid,fname,mname,lname,gender,emptype,hno,street,city,state,date_of_joining,CURRENT_DATE,email FROM employee WHERE employee.empid=OLD.empid;
+END;//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE TRIGGER  on_insertemployee_update_dept
+AFTER INSERT ON employee 
+for EACH ROW 
+BEGIN 
+SET @ab=(SELECT dept_headid FROM department WHERE department.deptid=NEW.deptid);
+UPDATE department SET dept_headid=CASE
+WHEN (@ab is NULL AND department.deptid=NEW.deptid)
+THEN new.empid
+else dept_headid
+END;
+END;//
+DELIMITER ;
+
+
+CREATE TABLE prev_department(
+    empid int,
+    deptid int,
+    date_of_joining date,
+    date_of_leaving date,
+    PRIMARY KEY(empid,deptid,date_of_leaving));
+
+
+DELIMITER //
+CREATE TRIGGER transfer_to_prev_department AFTER UPDATE ON employee 
+FOR EACH ROW 
+BEGIN 
+     IF NEW.deptid<>OLD.deptid THEN
+     INSERT into prev_department  values(OLD.empid,OLD.deptid,OLD.since,CURRENT_TIMESTAMP);
+     SET @ab=(SELECT dept_headid FROM department WHERE department.deptid=NEW.deptid);
+     UPDATE department SET dept_headid=CASE
+     WHEN (@ab is NULL)
+     THEN new.empid
+     else dept_headid
+ 	 END;
+     SET @bb=(SELECT dept_headid FROM department WHERE department.deptid=OLD.deptid);
+     
+     IF OLD.empid=@bb THEN
+     SET @gb=(SELECT empid FROM employee WHERE deptid=OLD.deptid);
+     SET @mn=(SELECT MIN(since) FROM employee WHERE empid=@gb);
+     SET @mm=(SELECT MIN(empid) FROM employee WHERE employee.since=@mn);
+     UPDATE department SET dept_headid=@mm WHERE department.deptid=OLD.deptid;
+     END IF;
+     END IF;
+END;//
+DELIMITER ;
+
+
+DELIMITER //
+CREATE TRIGGER employee_on_delete AFTER DELETE ON employee 
+FOR EACH ROW 
+BEGIN 
+     INSERT into prev_department  values(OLD.empid,OLD.deptid,OLD.since,CURRENT_TIMESTAMP);
+    
+     SET @bb=(SELECT dept_headid FROM department WHERE department.deptid=OLD.deptid);
+     
+     IF OLD.empid=@bb THEN
+     SET @gb=(SELECT empid FROM employee WHERE deptid=OLD.deptid);
+     SET @mn=(SELECT MIN(since) FROM employee WHERE empid=@gb);
+     SET @mm=(SELECT MIN(empid) FROM employee WHERE employee.since=@mn);
+     UPDATE department SET dept_headid=@mm WHERE department.deptid=OLD.deptid;
+     END IF;
+    
+END;//
+DELIMITER ;
+
+CREATE TABLE `admitpatient_room` (
+  `PatientID` int(20) DEFAULT NULL,
+  `Disease` varchar(50) DEFAULT NULL,
+  `AdmitDate` date DEFAULT NULL,
+  `RoomNo` int(150) DEFAULT NULL,
+  `DoctorID` int(20) DEFAULT NULL,
+  `AP_Remarks` varchar(50) DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+LOCK TABLES `admitpatient_room` WRITE;
+INSERT INTO `admitpatient_room` VALUES (1,'fever','2006-08-28',1,1,'healing'),(1,'fever','2006-08-28',3,1,'none'),(1,'fever','2006-08-28',1,1,''),(1,'fever','2005-10-17',2,1,'');
+UNLOCK TABLES;
+
+
+
+DROP TABLE IF EXISTS `bill_room`;
+CREATE TABLE `bill_room` (
+  `DischargeID` int(5) DEFAULT NULL,
+  `BillingDate` date DEFAULT NULL,
+  `RoomCharges` int(10) DEFAULT NULL,
+  `ServiceCharges` int(10) DEFAULT NULL,
+  `PaymentMode` varchar(10) DEFAULT NULL,
+  `PaymentModeDetails` varchar(25) DEFAULT NULL,
+  `ChargesPaid` int(10) DEFAULT NULL,
+  `DueCharges` int(10) DEFAULT NULL,
+  `TotalCharges` int(10) DEFAULT NULL,
+  `NoOfDays` int(5) DEFAULT NULL,
+  `TotalRoomCharges` int(10) DEFAULT NULL
+);
+
+DROP TABLE IF EXISTS `dischargepatient_room`;
+CREATE TABLE `dischargepatient_room` (
+  `AdmitID` int(20) DEFAULT NULL,
+  `DischargeDate` date DEFAULT NULL,
+  `DP_Remarks` varchar(50) DEFAULT NULL
+);
+
+LOCK TABLES `dischargepatient_room` WRITE;
+UNLOCK TABLES;
+
+DROP TABLE IF EXISTS `doctor`;
+CREATE TABLE `doctor` (
+  `DoctorID` int(10) DEFAULT NULL,
+  `DoctorName` varchar(20) DEFAULT NULL,
+  `FatherName` varchar(20) DEFAULT NULL,
+  `Email` varchar(20) DEFAULT NULL,
+  `ContacNo` int(10) DEFAULT NULL,
+  `Qualifications` varchar(50) DEFAULT NULL,
+  `Gender` varchar(1) DEFAULT NULL,
+  `BloodGroup` varchar(5) DEFAULT NULL,
+  `DateOfJoining` date DEFAULT NULL,
+  `Address` varchar(50) DEFAULT NULL
+);
